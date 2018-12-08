@@ -1,11 +1,29 @@
 #lang racket/base
 (require racket/date
+         racket/format
          racket/match
          racket/place
          racket/string
          net/url)
 
 (provide start-worker)
+
+(define (get-timestamp)
+  (let* ((d (current-date))
+         (tzoffset (date-time-zone-offset d)))
+    (apply format "~a-~a-~aT~a:~a:~a+~a:~a"
+           (map (λ (x) (~a x
+                           #:align 'right
+                           #:min-width 2
+                           #:left-pad-string "0"))
+                (list (date-year d)
+                      (date-month d)
+                      (date-day d)
+                      (date-hour d)
+                      (date-minute d)
+                      (date-second d)
+                      (quotient tzoffset 3600)
+                      (quotient (remainder tzoffset 3600) 60))))))
 
 (define (submit-pulse base-url token xp)
   (let ((url     (string->url (string-append base-url "/api/my/pulses")))
@@ -14,7 +32,7 @@
                        (string-append "X-API-Token: " token)))
         ; FIXME: generate json properly
         (data    (string-append "{\"coded_at\":\""
-                                (date->string (current-date) #t) "+02:00" ; FIXME
+                                (get-timestamp)
                                 "\",\"xps\":[{\"language\":\"Racket\",\"xp\":"
                                 (number->string xp)
                                 "}]}")))
@@ -35,10 +53,10 @@
 (define (run-worker pch host token)
   (let ((xp (place-channel-get pch)))
     (when (integer? xp)
-      (print "xp received")
-      (when (<= 200 (submit-pulse host token xp) 299)
-        ; success (TODO: what happens on error?
-        (place-channel-put pch xp)))
+      (let ((status (submit-pulse host token xp)))
+        (when (<= 200 status 299)
+          ; success (TODO: what happens on error?
+          (place-channel-put pch xp))))
     (when (eq? 'exit xp)
       (exit 0)))
   (run-worker pch host token))
