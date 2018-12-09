@@ -26,11 +26,9 @@
     (place-channel-put worker (list base-url token))
 
     (define (submit-xp language)
-      (log-error language)
-      (let ((sent-xp (sync/timeout 0 worker)))
-        (when sent-xp
-          (set! xp (- xp sent-xp))))
-      (place-channel-put worker xp))
+      (place-channel-put worker (list language xp))
+      (set! xp 0)
+      (send btn set-label "C::S 0"))
 
     (define count-keypresses-mixin
       (mixin ((class->interface text%)) ()

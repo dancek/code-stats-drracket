@@ -25,7 +25,7 @@
                       (quotient tzoffset 3600)
                       (quotient (remainder tzoffset 3600) 60))))))
 
-(define (submit-pulse base-url token xp)
+(define (submit-pulse base-url token language xp)
   (let ((url     (string->url (string-append base-url "/api/my/pulses")))
         (headers (list "User-Agent: code-stats-drracket/0.1.0-alpha"
                        "Content-Type: application/json"
@@ -33,7 +33,9 @@
         ; FIXME: generate json properly
         (data    (string-append "{\"coded_at\":\""
                                 (get-timestamp)
-                                "\",\"xps\":[{\"language\":\"Racket\",\"xp\":"
+                                "\",\"xps\":[{\"language\":\""
+                                language
+                                "\",\"xp\":"
                                 (number->string xp)
                                 "}]}")))
     (let-values (((status-line headers content-port)
@@ -46,17 +48,24 @@
           (string-split
             (bytes->string/latin-1 status-line)))))))
 
+(define (save-xp host token language xp)
+  (let ((status (submit-pulse host token language xp)))
+    (when (<= 300 status 499) ; unexpected redirect or client error
+      (log-error (string-append "Unexpected HTTP status " (number->string status)
+                                " from " host ". Stopping code-stats-drracket."))
+      (exit 1))
+    (when (>= status 500) ; server error; retry
+      (log-error (string-append "Server error " (number->string status)
+                                " from " host ". Retrying in 10 seconds."))
+      (sleep 10)
+      (save-xp host token language xp))))
+
 (define (start-worker pch)
   (match-let (((list host token) (place-channel-get pch)))
     (run-worker pch host token)))
 
+; FIXME: can this hang on exit?
 (define (run-worker pch host token)
-  (let ((xp (place-channel-get pch)))
-    (when (integer? xp)
-      (let ((status (submit-pulse host token xp)))
-        (when (<= 200 status 299)
-          ; success (TODO: what happens on error?
-          (place-channel-put pch xp))))
-    (when (eq? 'exit xp)
-      (exit 0)))
+  (match-let (((list language xp) (place-channel-get pch)))
+    (save-xp host token language xp))
   (run-worker pch host token))
