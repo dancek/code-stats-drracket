@@ -4,6 +4,7 @@
          racket/class
          racket/gui/base
          racket/place
+         racket/string
          racket/unit
          mrlib/switchable-button)
 (provide tool@)
@@ -24,7 +25,8 @@
     (define worker (dynamic-place "worker.rkt" 'start-worker))
     (place-channel-put worker (list base-url token))
 
-    (define (submit-xp)
+    (define (submit-xp language)
+      (log-error language)
       (let ((sent-xp (sync/timeout 0 worker)))
         (when sent-xp
           (set! xp (- xp sent-xp))))
@@ -51,17 +53,30 @@
     (define xp-counter-mixin
       (mixin (drracket:unit:frame<%>) ()
              (super-new)
-             (inherit get-button-panel)
-             (inherit register-toolbar-button)
+             (inherit get-button-panel
+                      get-definitions-text
+                      register-toolbar-button)
+
+             (define/private (language-name)
+               (let* ((defs-text (get-definitions-text))
+                      (language-settings (send defs-text get-next-settings))
+                      (language (drracket:language-configuration:language-settings-language language-settings)))
+                 ; adapted from drracket:rep:extract-language-name
+                 (if (is-a? language drracket:module-language:module-language<%>)
+                   (car (string-split
+                          (send language get-users-language-name defs-text
+                                (drracket:language-configuration:language-settings-settings language-settings))
+                          ","))
+                   (send language get-language-name))))
 
              (define/augment (on-tab-change from to)
-                             (submit-xp))
+                             (submit-xp (language-name)))
 
              (set! btn (new switchable-button%
                             (label "Code::Stats")
                             (parent (get-button-panel))
                             (bitmap icon)
-                            (callback (lambda (_) (submit-xp)))))
+                            (callback (λ (_) (submit-xp (language-name))))))
 
              (register-toolbar-button btn #:number 11)
              (send (get-button-panel) change-children
