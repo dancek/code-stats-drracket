@@ -8,6 +8,8 @@
 
 (provide start-worker)
 
+(define-logger codestats)
+
 (define (get-timestamp)
   (let* ((d (current-date))
          (tzoffset (date-time-zone-offset d)))
@@ -38,11 +40,14 @@
                                 "\",\"xp\":"
                                 (number->string xp)
                                 "}]}")))
+    (log-codestats-debug "Sending payload: ~a" data)
     (let-values (((status-line headers content-port)
                   (http-sendrecv/url url
                                      #:method #"POST"
                                      #:headers headers
                                      #:data data)))
+      (log-codestats-debug "Server replied with ~a" status-line)
+      (close-input-port content-port)
       (string->number
         (cadr
           (string-split
@@ -51,21 +56,24 @@
 (define (save-xp host token language xp)
   (let ((status (submit-pulse host token language xp)))
     (when (<= 300 status 499) ; unexpected redirect or client error
-      (log-fatal (string-append "Unexpected HTTP status " (number->string status)
-                                " from " host ". Stopping code-stats-drracket."))
+      (log-codestats-fatal "Unexpected HTTP status ~a from ~a. Stopping code-stats-racket."
+                           (number->string status) host)
       (exit 1))
     (when (>= status 500) ; server error; retry
-      (log-error (string-append "Server error " (number->string status)
-                                " from " host ". Retrying in 10 seconds."))
+      (log-codestats-error "Server error ~a from ~a. Retrying in 10 seconds."
+                           (number->string status) host)
       (sleep 10)
       (save-xp host token language xp))))
 
 (define (start-worker pch)
+  (log-codestats-debug "Started worker place.")
   (match-let (((list host token) (place-channel-get pch)))
+    (log-codestats-debug "Worker config: host=~a token=~a" host token)
     (run-worker pch host token)))
 
 ; FIXME: can this hang on exit?
 (define (run-worker pch host token)
   (match-let (((list language xp) (place-channel-get pch)))
+    (log-codestats-debug "Worker received ~a xp in ~a." xp language)
     (save-xp host token language xp))
   (run-worker pch host token))

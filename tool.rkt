@@ -14,6 +14,8 @@
     (import drracket:tool^)
     (export drracket:tool-exports^)
 
+    (define-logger codestats)
+
     (define token (getenv "CODESTATS_API_KEY"))
     (define base-url (or (getenv "CODESTATS_API_URL")
                          "https://codestats.net"))
@@ -26,6 +28,7 @@
     (place-channel-put worker (list base-url token))
 
     (define (submit-xp language)
+      (log-codestats-debug "Adding ~a xp in ~a to submit queue." xp language)
       (place-channel-put worker (list language xp))
       (set! xp 0)
       (send btn set-label "C::S 0"))
