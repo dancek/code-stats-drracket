@@ -22,7 +22,7 @@
     (define xp 0)
     (define btn #f)
 
-    (define worker (dynamic-place "worker.rkt" 'start-worker))
+    (define worker (dynamic-place 'code-stats-drracket/worker 'start-worker))
     (place-channel-put worker (list base-url token))
 
     (define (submit-xp language)

@@ -51,7 +51,7 @@
 (define (save-xp host token language xp)
   (let ((status (submit-pulse host token language xp)))
     (when (<= 300 status 499) ; unexpected redirect or client error
-      (log-error (string-append "Unexpected HTTP status " (number->string status)
+      (log-fatal (string-append "Unexpected HTTP status " (number->string status)
                                 " from " host ". Stopping code-stats-drracket."))
       (exit 1))
     (when (>= status 500) ; server error; retry
